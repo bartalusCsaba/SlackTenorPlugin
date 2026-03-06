@@ -9,6 +9,11 @@ export interface TenorGif {
   height: number;
 }
 
+export interface TenorSearchResult {
+  gifs: TenorGif[];
+  next: string; // pagination token
+}
+
 interface TenorMediaFormat {
   url: string;
   dims: [number, number];
@@ -30,7 +35,11 @@ interface TenorSearchResponse {
   next: string;
 }
 
-export async function searchGifs(query: string, limit = 5): Promise<TenorGif[]> {
+export async function searchGifs(
+  query: string,
+  limit = 20,
+  pos?: string
+): Promise<TenorSearchResult> {
   const apiKey = process.env.TENOR_API_KEY;
   if (!apiKey) {
     throw new Error("TENOR_API_KEY is not set");
@@ -44,6 +53,10 @@ export async function searchGifs(query: string, limit = 5): Promise<TenorGif[]> 
     media_filter: "gif,tinygif,mediumgif",
   });
 
+  if (pos) {
+    params.set("pos", pos);
+  }
+
   const res = await fetch(`${TENOR_API_BASE}/search?${params}`);
   if (!res.ok) {
     throw new Error(`Tenor API error: ${res.status} ${res.statusText}`);
@@ -51,12 +64,15 @@ export async function searchGifs(query: string, limit = 5): Promise<TenorGif[]> 
 
   const data: TenorSearchResponse = await res.json();
 
-  return data.results.map((r) => ({
-    id: r.id,
-    title: r.title || query,
-    url: r.media_formats.gif.url,
-    preview: r.media_formats.tinygif.url,
-    width: r.media_formats.gif.dims[0],
-    height: r.media_formats.gif.dims[1],
-  }));
+  return {
+    gifs: data.results.map((r) => ({
+      id: r.id,
+      title: r.title || query,
+      url: r.media_formats.gif.url,
+      preview: r.media_formats.tinygif.url,
+      width: r.media_formats.gif.dims[0],
+      height: r.media_formats.gif.dims[1],
+    })),
+    next: data.next,
+  };
 }

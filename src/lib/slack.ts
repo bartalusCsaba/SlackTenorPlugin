@@ -24,7 +24,11 @@ export async function verifySlackRequest(
   );
 }
 
-export function buildGifPickerBlocks(gifs: TenorGif[], query: string) {
+export function buildGifPickerBlocks(
+  gifs: TenorGif[],
+  query: string,
+  nextPos: string
+) {
   const blocks: unknown[] = [
     {
       type: "section",
@@ -59,6 +63,33 @@ export function buildGifPickerBlocks(gifs: TenorGif[], query: string) {
             title: gif.title,
             query,
           }),
+        },
+      ],
+    });
+  }
+
+  // "Load more" button if there are more results
+  if (nextPos) {
+    blocks.push({
+      type: "actions",
+      block_id: "load_more_actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Load more GIFs",
+          },
+          action_id: "load_more",
+          value: JSON.stringify({ query, pos: nextPos }),
+        },
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Cancel",
+          },
+          action_id: "cancel_search",
         },
       ],
     });

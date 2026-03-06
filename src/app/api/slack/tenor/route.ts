@@ -35,8 +35,12 @@ export async function POST(req: NextRequest) {
   });
 }
 
-async function sendGifResults(query: string, responseUrl: string) {
-  const gifs = await searchGifs(query, 5);
+async function sendGifResults(
+  query: string,
+  responseUrl: string,
+  pos?: string
+) {
+  const { gifs, next } = await searchGifs(query, 20, pos);
 
   if (gifs.length === 0) {
     await fetch(responseUrl, {
@@ -51,7 +55,7 @@ async function sendGifResults(query: string, responseUrl: string) {
     return;
   }
 
-  const blocks = buildGifPickerBlocks(gifs, query);
+  const blocks = buildGifPickerBlocks(gifs, query, next);
 
   await fetch(responseUrl, {
     method: "POST",
@@ -64,3 +68,6 @@ async function sendGifResults(query: string, responseUrl: string) {
     }),
   });
 }
+
+// Exported so the interactions route can reuse it for "Load more"
+export { sendGifResults };
