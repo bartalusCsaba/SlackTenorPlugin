@@ -12,23 +12,32 @@ export interface KlipySearchResult {
   nextPage: number | null;
 }
 
+interface KlipyFileVariant {
+  url: string;
+  width: number;
+  height: number;
+  size: number;
+}
+
 interface KlipyGifItem {
-  id: string;
+  id: number;
   title: string;
   slug: string;
-  url: string;
   file: {
-    mp4: string;
-    gif: string;
-    webp: string;
+    hd: { gif: KlipyFileVariant; webp: KlipyFileVariant; mp4: KlipyFileVariant };
+    md: { gif: KlipyFileVariant; webp: KlipyFileVariant; mp4: KlipyFileVariant };
+    sm: { gif: KlipyFileVariant; webp: KlipyFileVariant; mp4: KlipyFileVariant };
+    xs: { gif: KlipyFileVariant; webp: KlipyFileVariant; mp4: KlipyFileVariant };
   };
 }
 
 interface KlipySearchResponse {
+  result: boolean;
   data: {
     data: KlipyGifItem[];
     current_page: number;
-    last_page: number;
+    per_page: number;
+    has_next: boolean;
   };
 }
 
@@ -59,16 +68,15 @@ export async function searchGifs(
   }
 
   const data: KlipySearchResponse = await res.json();
-  console.log(`[klipy-api] Results: ${data.data.data.length} gifs, page ${data.data.current_page}/${data.data.last_page}`);
-  const { current_page, last_page } = data.data;
+  console.log(`[klipy-api] Results: ${data.data.data.length} gifs, page ${data.data.current_page}, has_next=${data.data.has_next}`);
 
   return {
     gifs: data.data.data.map((item) => ({
-      id: item.id,
+      id: String(item.id),
       title: item.title || query,
-      url: item.file.gif,
-      preview: item.file.webp || item.file.gif,
+      url: item.file.md.gif.url,
+      preview: item.file.sm.webp.url || item.file.sm.gif.url,
     })),
-    nextPage: current_page < last_page ? current_page + 1 : null,
+    nextPage: data.data.has_next ? data.data.current_page + 1 : null,
   };
 }
