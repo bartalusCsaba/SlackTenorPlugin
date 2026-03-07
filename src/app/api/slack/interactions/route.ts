@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import {
   verifySlackRequest,
   buildGifMessageBlocks,
-  buildGifPickerBlocks,
   postMessage,
+  updateModal,
+  buildGifPickerModalBlocks,
 } from "@/lib/slack";
 import { searchGifs } from "@/lib/klipy";
 
@@ -15,9 +17,11 @@ interface SlackAction {
 interface SlackInteractionPayload {
   type: string;
   user: { id: string; username: string };
-  channel: { id: string };
   actions: SlackAction[];
-  response_url: string;
+  view?: {
+    id: string;
+    private_metadata: string;
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -38,50 +42,56 @@ export async function POST(req: NextRequest) {
 
   const payload: SlackInteractionPayload = JSON.parse(payloadStr);
 
-  if (payload.type === "block_actions") {
+  if (payload.type === "block_actions" && payload.view) {
     const action = payload.actions[0];
+    const { channel_id, query } = JSON.parse(payload.view.private_metadata);
+    const viewId = payload.view.id;
 
     // User picked a GIF — post it to the channel
     if (action.action_id === "send_gif" && action.value) {
       const { url, title } = JSON.parse(action.value);
       const userId = payload.user.id;
-      const channelId = payload.channel.id;
 
-      const blocks = buildGifMessageBlocks(url, title, userId);
-      await postMessage(channelId, blocks, `${title} (via /klipy)`);
+      after(async () => {
+        try {
+          const blocks = buildGifMessageBlocks(url, title, userId);
+          await postMessage(channel_id, blocks, `${title} (via /klipy)`);
 
-      // Delete the ephemeral picker message
-      await fetch(payload.response_url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ delete_original: true }),
+          // Update modal to confirm
+          await updateModal(
+            viewId,
+            [
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `*GIF sent!* You posted *${title}* to the channel.`,
+                },
+              },
+            ],
+            query,
+            channel_id
+          );
+        } catch (err) {
+          console.error("Failed to send GIF:", err);
+        }
       });
 
       return new NextResponse(null, { status: 200 });
     }
 
-    // User wants more GIFs — fetch next page and replace message
+    // User wants more GIFs
     if (action.action_id === "load_more" && action.value) {
-      const { query, page } = JSON.parse(action.value);
+      const { query: loadQuery, page } = JSON.parse(action.value);
 
-      // Respond quickly, then send results async
-      loadMoreGifs(query, page, payload.response_url).catch((err) =>
-        console.error("Failed to load more GIFs:", err)
-      );
-
-      return NextResponse.json({
-        response_type: "ephemeral",
-        replace_original: true,
-        text: `Loading more GIFs for "${query}"...`,
-      });
-    }
-
-    // User cancelled the search
-    if (action.action_id === "cancel_search") {
-      await fetch(payload.response_url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ delete_original: true }),
+      after(async () => {
+        try {
+          const { gifs, nextPage } = await searchGifs(loadQuery, 10, page);
+          const blocks = buildGifPickerModalBlocks(gifs, loadQuery, nextPage);
+          await updateModal(viewId, blocks, loadQuery, channel_id);
+        } catch (err) {
+          console.error("Failed to load more GIFs:", err);
+        }
       });
 
       return new NextResponse(null, { status: 200 });
@@ -89,38 +99,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
-}
-
-async function loadMoreGifs(
-  query: string,
-  page: number,
-  responseUrl: string
-) {
-  const { gifs, nextPage } = await searchGifs(query, 20, page);
-
-  if (gifs.length === 0) {
-    await fetch(responseUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        response_type: "ephemeral",
-        replace_original: true,
-        text: `No more GIFs found for "${query}". Try a different search!`,
-      }),
-    });
-    return;
-  }
-
-  const blocks = buildGifPickerBlocks(gifs, query, nextPage);
-
-  await fetch(responseUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      response_type: "ephemeral",
-      replace_original: true,
-      blocks,
-      text: `More GIF results for "${query}"`,
-    }),
-  });
 }

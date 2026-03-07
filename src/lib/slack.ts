@@ -24,7 +24,83 @@ export async function verifySlackRequest(
   );
 }
 
-export function buildGifPickerBlocks(
+export async function openModal(
+  triggerId: string,
+  query: string,
+  channelId: string
+): Promise<string> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) throw new Error("SLACK_BOT_TOKEN is not set");
+
+  const res = await fetch("https://slack.com/api/views.open", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      trigger_id: triggerId,
+      view: {
+        type: "modal",
+        title: { type: "plain_text", text: "Klipy GIFs" },
+        close: { type: "plain_text", text: "Close" },
+        private_metadata: JSON.stringify({ channel_id: channelId, query }),
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `Searching for *"${query}"*...`,
+            },
+          },
+        ],
+      },
+    }),
+  });
+
+  const data = await res.json();
+  console.log(`[slack] views.open ok=${data.ok} error=${data.error || "none"}`);
+  if (!data.ok) {
+    throw new Error(`Slack views.open error: ${data.error}`);
+  }
+  return data.view.id;
+}
+
+export async function updateModal(
+  viewId: string,
+  blocks: unknown[],
+  query: string,
+  channelId: string
+) {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) throw new Error("SLACK_BOT_TOKEN is not set");
+
+  const res = await fetch("https://slack.com/api/views.update", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      view_id: viewId,
+      view: {
+        type: "modal",
+        title: { type: "plain_text", text: "Klipy GIFs" },
+        close: { type: "plain_text", text: "Close" },
+        private_metadata: JSON.stringify({ channel_id: channelId, query }),
+        blocks,
+      },
+    }),
+  });
+
+  const data = await res.json();
+  console.log(`[slack] views.update ok=${data.ok} error=${data.error || "none"}`);
+  if (!data.ok) {
+    throw new Error(`Slack views.update error: ${data.error}`);
+  }
+}
+
+export function buildGifPickerModalBlocks(
   gifs: KlipyGif[],
   query: string,
   nextPage: number | null
@@ -34,17 +110,36 @@ export function buildGifPickerBlocks(
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*GIF search:* _${query}_\nPick one to post it to the channel:`,
+        text: `*Results for "${query}":*`,
       },
     },
   ];
 
-  for (const gif of gifs) {
+  if (gifs.length === 0) {
     blocks.push({
-      type: "image",
-      image_url: gif.preview,
-      alt_text: gif.title,
-      block_id: `gif_preview_${gif.id}`,
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `No GIFs found for "${query}". Try a different search!`,
+      },
+    });
+    return blocks;
+  }
+
+  for (const gif of gifs) {
+    // Section with small thumbnail on the right + Send button below
+    blocks.push({
+      type: "section",
+      block_id: `gif_section_${gif.id}`,
+      text: {
+        type: "mrkdwn",
+        text: `*${gif.title}*`,
+      },
+      accessory: {
+        type: "image",
+        image_url: gif.preview,
+        alt_text: gif.title,
+      },
     });
     blocks.push({
       type: "actions",
@@ -52,10 +147,7 @@ export function buildGifPickerBlocks(
       elements: [
         {
           type: "button",
-          text: {
-            type: "plain_text",
-            text: "Send this GIF",
-          },
+          text: { type: "plain_text", text: "Send this GIF" },
           style: "primary",
           action_id: "send_gif",
           value: JSON.stringify({
@@ -68,7 +160,6 @@ export function buildGifPickerBlocks(
     });
   }
 
-  // "Load more" button if there are more results
   if (nextPage) {
     blocks.push({
       type: "actions",
@@ -76,20 +167,9 @@ export function buildGifPickerBlocks(
       elements: [
         {
           type: "button",
-          text: {
-            type: "plain_text",
-            text: "Load more GIFs",
-          },
+          text: { type: "plain_text", text: "Load more GIFs" },
           action_id: "load_more",
           value: JSON.stringify({ query, page: nextPage }),
-        },
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Cancel",
-          },
-          action_id: "cancel_search",
         },
       ],
     });
@@ -97,12 +177,7 @@ export function buildGifPickerBlocks(
 
   blocks.push({
     type: "context",
-    elements: [
-      {
-        type: "mrkdwn",
-        text: "Powered by Klipy",
-      },
-    ],
+    elements: [{ type: "mrkdwn", text: "Powered by Klipy" }],
   });
 
   return blocks;

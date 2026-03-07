@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
-import { verifySlackRequest, buildGifPickerBlocks } from "@/lib/slack";
+import {
+  verifySlackRequest,
+  openModal,
+  updateModal,
+  buildGifPickerModalBlocks,
+} from "@/lib/slack";
 import { searchGifs } from "@/lib/klipy";
 
 export async function POST(req: NextRequest) {
@@ -15,7 +20,8 @@ export async function POST(req: NextRequest) {
 
   const params = new URLSearchParams(body);
   const query = params.get("text")?.trim();
-  const responseUrl = params.get("response_url");
+  const triggerId = params.get("trigger_id");
+  const channelId = params.get("channel_id");
 
   if (!query) {
     return NextResponse.json({
@@ -24,58 +30,32 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Use after() so Vercel keeps the function alive after responding
+  // Open modal with loading state immediately (before the 3s timeout)
+  const viewId = await openModal(triggerId!, query, channelId!);
+
+  // Fetch GIFs and update modal in background
   after(async () => {
     try {
-      await sendGifResults(query, responseUrl!);
+      await loadAndShowGifs(query, viewId, channelId!);
     } catch (err) {
-      console.error("Failed to send GIF results:", err);
+      console.error("Failed to load GIFs:", err);
     }
   });
 
-  return NextResponse.json({
-    response_type: "ephemeral",
-    text: `Searching for "${query}"...`,
-  });
+  // Acknowledge slash command
+  return new NextResponse(null, { status: 200 });
 }
 
-async function sendGifResults(
+export async function loadAndShowGifs(
   query: string,
-  responseUrl: string,
+  viewId: string,
+  channelId: string,
   page?: number
 ) {
   console.log(`[klipy] Searching for "${query}" (page=${page ?? 1})`);
-  const { gifs, nextPage } = await searchGifs(query, 20, page);
+  const { gifs, nextPage } = await searchGifs(query, 10, page);
   console.log(`[klipy] Found ${gifs.length} GIFs, nextPage=${nextPage}`);
 
-  if (gifs.length === 0) {
-    await fetch(responseUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        response_type: "ephemeral",
-        replace_original: true,
-        text: `No GIFs found for "${query}". Try a different search!`,
-      }),
-    });
-    return;
-  }
-
-  const blocks = buildGifPickerBlocks(gifs, query, nextPage);
-
-  console.log(`[klipy] Sending ${blocks.length} blocks to response_url`);
-  const res = await fetch(responseUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      response_type: "ephemeral",
-      replace_original: true,
-      blocks,
-      text: `GIF results for "${query}"`,
-    }),
-  });
-  const resText = await res.text();
-  console.log(`[klipy] response_url status=${res.status} body=${resText}`);
+  const blocks = buildGifPickerModalBlocks(gifs, query, nextPage);
+  await updateModal(viewId, blocks, query, channelId);
 }
-
-export { sendGifResults };
