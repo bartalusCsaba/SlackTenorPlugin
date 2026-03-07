@@ -40,7 +40,9 @@ async function sendGifResults(
   responseUrl: string,
   page?: number
 ) {
+  console.log(`[klipy] Searching for "${query}" (page=${page ?? 1})`);
   const { gifs, nextPage } = await searchGifs(query, 20, page);
+  console.log(`[klipy] Found ${gifs.length} GIFs, nextPage=${nextPage}`);
 
   if (gifs.length === 0) {
     await fetch(responseUrl, {
@@ -57,7 +59,8 @@ async function sendGifResults(
 
   const blocks = buildGifPickerBlocks(gifs, query, nextPage);
 
-  await fetch(responseUrl, {
+  console.log(`[klipy] Sending ${blocks.length} blocks to response_url`);
+  const res = await fetch(responseUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -67,6 +70,8 @@ async function sendGifResults(
       text: `GIF results for "${query}"`,
     }),
   });
+  const resText = await res.text();
+  console.log(`[klipy] response_url status=${res.status} body=${resText}`);
 }
 
 export { sendGifResults };
