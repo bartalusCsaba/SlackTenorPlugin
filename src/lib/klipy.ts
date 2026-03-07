@@ -48,14 +48,18 @@ export async function searchGifs(
     page: String(page),
   });
 
-  const res = await fetch(
-    `${KLIPY_API_BASE}/${apiKey}/gifs/search?${params}`
-  );
+  const url = `${KLIPY_API_BASE}/${apiKey}/gifs/search?${params}`;
+  console.log(`[klipy-api] Fetching: ${url.replace(apiKey, "***")}`);
+  const res = await fetch(url);
+  console.log(`[klipy-api] Status: ${res.status} ${res.statusText}`);
   if (!res.ok) {
+    const errBody = await res.text();
+    console.error(`[klipy-api] Error body: ${errBody}`);
     throw new Error(`Klipy API error: ${res.status} ${res.statusText}`);
   }
 
   const data: KlipySearchResponse = await res.json();
+  console.log(`[klipy-api] Results: ${data.data.data.length} gifs, page ${data.data.current_page}/${data.data.last_page}`);
   const { current_page, last_page } = data.data;
 
   return {
