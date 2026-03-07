@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     const viewId = payload.view.id;
 
     // User picked a GIF — post it to the channel
-    if (action.action_id === "send_gif" && action.value) {
+    if (action.action_id.startsWith("send_gif_") && action.value) {
       const { url, title } = JSON.parse(action.value);
       const userId = payload.user.id;
 

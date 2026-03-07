@@ -105,58 +105,46 @@ export function buildGifPickerModalBlocks(
   query: string,
   nextPage: number | null
 ) {
-  const blocks: unknown[] = [
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*Results for "${query}":*`,
-      },
-    },
-  ];
-
   if (gifs.length === 0) {
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `No GIFs found for "${query}". Try a different search!`,
+    return [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `No GIFs found for "${query}". Try a different search!`,
+        },
       },
-    });
-    return blocks;
+    ];
   }
 
-  for (const gif of gifs) {
-    // Section with small thumbnail on the right + Send button below
+  const blocks: unknown[] = [];
+
+  // Stack all GIF images back-to-back with just a number label
+  for (let i = 0; i < gifs.length; i++) {
     blocks.push({
-      type: "section",
-      block_id: `gif_section_${gif.id}`,
-      text: {
-        type: "mrkdwn",
-        text: `*${gif.title}*`,
-      },
-      accessory: {
-        type: "image",
-        image_url: gif.preview,
-        alt_text: gif.title,
-      },
+      type: "image",
+      title: { type: "plain_text", text: `${i + 1}` },
+      image_url: gifs[i].preview,
+      alt_text: gifs[i].title,
+      block_id: `gif_img_${i}`,
     });
+  }
+
+  // Numbered buttons at the bottom to pick a GIF
+  const buttons = gifs.map((gif, i) => ({
+    type: "button",
+    text: { type: "plain_text", text: `${i + 1}` },
+    style: "primary" as const,
+    action_id: `send_gif_${i}`,
+    value: JSON.stringify({ url: gif.url, title: gif.title, query }),
+  }));
+
+  // Slack allows max 25 elements per actions block, split if needed
+  for (let i = 0; i < buttons.length; i += 25) {
     blocks.push({
       type: "actions",
-      block_id: `gif_actions_${gif.id}`,
-      elements: [
-        {
-          type: "button",
-          text: { type: "plain_text", text: "Send this GIF" },
-          style: "primary",
-          action_id: "send_gif",
-          value: JSON.stringify({
-            url: gif.url,
-            title: gif.title,
-            query,
-          }),
-        },
-      ],
+      block_id: `pick_actions_${i}`,
+      elements: buttons.slice(i, i + 25),
     });
   }
 
