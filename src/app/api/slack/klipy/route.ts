@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { verifySlackRequest, buildGifPickerBlocks } from "@/lib/slack";
 import { searchGifs } from "@/lib/klipy";
 
@@ -23,11 +24,14 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Acknowledge immediately (Slack requires response within 3s)
-  // Then send the actual results via response_url
-  sendGifResults(query, responseUrl!).catch((err) =>
-    console.error("Failed to send GIF results:", err)
-  );
+  // Use after() so Vercel keeps the function alive after responding
+  after(async () => {
+    try {
+      await sendGifResults(query, responseUrl!);
+    } catch (err) {
+      console.error("Failed to send GIF results:", err);
+    }
+  });
 
   return NextResponse.json({
     response_type: "ephemeral",
