@@ -53,7 +53,7 @@ export async function loadAndShowGifs(
   page?: number
 ) {
   console.log(`[klipy] Searching for "${query}" (page=${page ?? 1})`);
-  const { gifs, nextPage } = await searchGifs(query, 10, page);
+  const { gifs, nextPage } = await searchGifs(query, 20, page);
   console.log(`[klipy] Found ${gifs.length} GIFs, nextPage=${nextPage}`);
 
   const blocks = buildGifPickerModalBlocks(gifs, query, nextPage);

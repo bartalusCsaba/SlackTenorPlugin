@@ -119,32 +119,25 @@ export function buildGifPickerModalBlocks(
 
   const blocks: unknown[] = [];
 
-  // Stack all GIF images back-to-back with just a number label
-  for (let i = 0; i < gifs.length; i++) {
+  // Each GIF: image + small Send button right below
+  for (const gif of gifs) {
     blocks.push({
       type: "image",
-      title: { type: "plain_text", text: `${i + 1}` },
-      image_url: gifs[i].preview,
-      alt_text: gifs[i].title,
-      block_id: `gif_img_${i}`,
+      image_url: gif.preview,
+      alt_text: gif.title,
+      block_id: `gif_img_${gif.id}`,
     });
-  }
-
-  // Numbered buttons at the bottom to pick a GIF
-  const buttons = gifs.map((gif, i) => ({
-    type: "button",
-    text: { type: "plain_text", text: `${i + 1}` },
-    style: "primary" as const,
-    action_id: `send_gif_${i}`,
-    value: JSON.stringify({ url: gif.url, title: gif.title, query }),
-  }));
-
-  // Slack allows max 25 elements per actions block, split if needed
-  for (let i = 0; i < buttons.length; i += 25) {
     blocks.push({
       type: "actions",
-      block_id: `pick_actions_${i}`,
-      elements: buttons.slice(i, i + 25),
+      block_id: `gif_send_${gif.id}`,
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Send" },
+          action_id: `send_gif_${gif.id}`,
+          value: JSON.stringify({ url: gif.url, title: gif.title, query }),
+        },
+      ],
     });
   }
 
@@ -166,6 +159,23 @@ export function buildGifPickerModalBlocks(
   blocks.push({
     type: "context",
     elements: [{ type: "mrkdwn", text: "Powered by Klipy" }],
+  });
+
+  return blocks;
+}
+
+export function buildLoadingBlocks(existingBlocks: unknown[], query: string) {
+  // Remove the old load_more and context blocks, add a loading indicator
+  const blocks = existingBlocks.filter((b: unknown) => {
+    const block = b as { block_id?: string; type?: string };
+    return block.block_id !== "load_more_actions" &&
+      !(block.type === "context");
+  });
+
+  blocks.push({
+    type: "section",
+    block_id: "loading_indicator",
+    text: { type: "mrkdwn", text: `_Loading more GIFs for "${query}"..._` },
   });
 
   return blocks;

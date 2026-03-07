@@ -6,6 +6,7 @@ import {
   postMessage,
   updateModal,
   buildGifPickerModalBlocks,
+  buildLoadingBlocks,
 } from "@/lib/slack";
 import { searchGifs } from "@/lib/klipy";
 
@@ -21,6 +22,7 @@ interface SlackInteractionPayload {
   view?: {
     id: string;
     private_metadata: string;
+    blocks: unknown[];
   };
 }
 
@@ -57,7 +59,6 @@ export async function POST(req: NextRequest) {
           const blocks = buildGifMessageBlocks(url, title, userId);
           await postMessage(channel_id, blocks, `${title} (via /klipy)`);
 
-          // Update modal to confirm
           await updateModal(
             viewId,
             [
@@ -80,15 +81,35 @@ export async function POST(req: NextRequest) {
       return new NextResponse(null, { status: 200 });
     }
 
-    // User wants more GIFs
+    // User wants more GIFs — show loading, then append results
     if (action.action_id === "load_more" && action.value) {
       const { query: loadQuery, page } = JSON.parse(action.value);
+      const existingBlocks = payload.view.blocks;
+
+      // Immediately show loading state
+      const loadingBlocks = buildLoadingBlocks(existingBlocks, loadQuery);
+      await updateModal(viewId, loadingBlocks, loadQuery, channel_id);
 
       after(async () => {
         try {
-          const { gifs, nextPage } = await searchGifs(loadQuery, 10, page);
-          const blocks = buildGifPickerModalBlocks(gifs, loadQuery, nextPage);
-          await updateModal(viewId, blocks, loadQuery, channel_id);
+          const { gifs, nextPage } = await searchGifs(loadQuery, 20, page);
+          const newGifBlocks = buildGifPickerModalBlocks(gifs, loadQuery, nextPage);
+
+          // Remove the loading indicator from existing blocks
+          const kept = loadingBlocks.filter((b: unknown) => {
+            const block = b as { block_id?: string };
+            return block.block_id !== "loading_indicator";
+          });
+
+          // Append new GIF blocks after existing ones
+          const combined = [...kept, ...newGifBlocks];
+
+          // Slack modals have a 100 block limit — trim oldest if needed
+          const finalBlocks = combined.length > 100
+            ? combined.slice(combined.length - 100)
+            : combined;
+
+          await updateModal(viewId, finalBlocks, loadQuery, channel_id);
         } catch (err) {
           console.error("Failed to load more GIFs:", err);
         }
