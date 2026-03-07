@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySlackRequest, buildGifPickerBlocks } from "@/lib/slack";
-import { searchGifs } from "@/lib/tenor";
+import { searchGifs } from "@/lib/klipy";
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   if (!query) {
     return NextResponse.json({
       response_type: "ephemeral",
-      text: "Usage: `/tenor funny cat` — search for a GIF and post it to the channel.",
+      text: "Usage: `/klipy funny cat` — search for a GIF and post it to the channel.",
     });
   }
 
@@ -38,9 +38,9 @@ export async function POST(req: NextRequest) {
 async function sendGifResults(
   query: string,
   responseUrl: string,
-  pos?: string
+  page?: number
 ) {
-  const { gifs, next } = await searchGifs(query, 20, pos);
+  const { gifs, nextPage } = await searchGifs(query, 20, page);
 
   if (gifs.length === 0) {
     await fetch(responseUrl, {
@@ -55,7 +55,7 @@ async function sendGifResults(
     return;
   }
 
-  const blocks = buildGifPickerBlocks(gifs, query, next);
+  const blocks = buildGifPickerBlocks(gifs, query, nextPage);
 
   await fetch(responseUrl, {
     method: "POST",
@@ -69,5 +69,4 @@ async function sendGifResults(
   });
 }
 
-// Exported so the interactions route can reuse it for "Load more"
 export { sendGifResults };

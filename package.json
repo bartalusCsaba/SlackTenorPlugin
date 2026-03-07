@@ -1,5 +1,5 @@
 {
-  "name": "slack-tenor-plugin",
+  "name": "slack-klipy-plugin",
   "version": "1.0.0",
   "private": true,
   "scripts": {

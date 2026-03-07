@@ -5,7 +5,7 @@ import {
   buildGifPickerBlocks,
   postMessage,
 } from "@/lib/slack";
-import { searchGifs } from "@/lib/tenor";
+import { searchGifs } from "@/lib/klipy";
 
 interface SlackAction {
   action_id: string;
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       const channelId = payload.channel.id;
 
       const blocks = buildGifMessageBlocks(url, title, userId);
-      await postMessage(channelId, blocks, `${title} (via /tenor)`);
+      await postMessage(channelId, blocks, `${title} (via /klipy)`);
 
       // Delete the ephemeral picker message
       await fetch(payload.response_url, {
@@ -62,10 +62,10 @@ export async function POST(req: NextRequest) {
 
     // User wants more GIFs — fetch next page and replace message
     if (action.action_id === "load_more" && action.value) {
-      const { query, pos } = JSON.parse(action.value);
+      const { query, page } = JSON.parse(action.value);
 
       // Respond quickly, then send results async
-      loadMoreGifs(query, pos, payload.response_url).catch((err) =>
+      loadMoreGifs(query, page, payload.response_url).catch((err) =>
         console.error("Failed to load more GIFs:", err)
       );
 
@@ -93,10 +93,10 @@ export async function POST(req: NextRequest) {
 
 async function loadMoreGifs(
   query: string,
-  pos: string,
+  page: number,
   responseUrl: string
 ) {
-  const { gifs, next } = await searchGifs(query, 20, pos);
+  const { gifs, nextPage } = await searchGifs(query, 20, page);
 
   if (gifs.length === 0) {
     await fetch(responseUrl, {
@@ -111,7 +111,7 @@ async function loadMoreGifs(
     return;
   }
 
-  const blocks = buildGifPickerBlocks(gifs, query, next);
+  const blocks = buildGifPickerBlocks(gifs, query, nextPage);
 
   await fetch(responseUrl, {
     method: "POST",

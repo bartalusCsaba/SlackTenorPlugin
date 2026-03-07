@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Slack Tenor Plugin",
+  title: "Slack Klipy Plugin",
 };
 
 export default function RootLayout({

@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import type { TenorGif } from "./tenor";
+import type { KlipyGif } from "./klipy";
 
 export async function verifySlackRequest(
   body: string,
@@ -25,9 +25,9 @@ export async function verifySlackRequest(
 }
 
 export function buildGifPickerBlocks(
-  gifs: TenorGif[],
+  gifs: KlipyGif[],
   query: string,
-  nextPos: string
+  nextPage: number | null
 ) {
   const blocks: unknown[] = [
     {
@@ -69,7 +69,7 @@ export function buildGifPickerBlocks(
   }
 
   // "Load more" button if there are more results
-  if (nextPos) {
+  if (nextPage) {
     blocks.push({
       type: "actions",
       block_id: "load_more_actions",
@@ -81,7 +81,7 @@ export function buildGifPickerBlocks(
             text: "Load more GIFs",
           },
           action_id: "load_more",
-          value: JSON.stringify({ query, pos: nextPos }),
+          value: JSON.stringify({ query, page: nextPage }),
         },
         {
           type: "button",
@@ -100,7 +100,7 @@ export function buildGifPickerBlocks(
     elements: [
       {
         type: "mrkdwn",
-        text: "Powered by Tenor",
+        text: "Powered by Klipy",
       },
     ],
   });
@@ -124,7 +124,7 @@ export function buildGifMessageBlocks(
       elements: [
         {
           type: "mrkdwn",
-          text: `Posted by <@${userId}> via /tenor`,
+          text: `Posted by <@${userId}> via /klipy`,
         },
       ],
     },
